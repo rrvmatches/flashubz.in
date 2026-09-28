@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/admin
+Sitemap: https://flashubz-universe.preview.emergentagent.com/api/sitemap.xml

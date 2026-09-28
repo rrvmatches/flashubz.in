@@ -1,0 +1,89 @@
+{
+  "summary": "Executed backend pytest + frontend Playwright E2E against external URL. Core public discovery/playback/search/contact/mobile flows work. Critical admin browser write operations fail with 'Invalid origin'. Cleanup completed and public library returned to empty (0 songs).",
+  "test_credentials": "IMPORTANT: /app/memory/test_credentials.md is present but empty; admin credentials were read from backend/.env per review instructions.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/admin/songs, /api/admin/settings (browser-originated writes)",
+        "issue": "Authenticated admin write requests from browser fail with 403 'Invalid origin', blocking upload/settings/editorial CRUD in UI.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "/api/admin/login (Set-Cookie contract)",
+        "issue": "Observed cookie header returns SameSite=None; Partitioned at runtime, while requirement expects HttpOnly Secure SameSiteStrict.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Admin Upload Song form",
+        "issue": "Submitting valid WAV+cover+metadata from browser shows 'Invalid origin' and never transitions to songs list.",
+        "selector": "[data-testid='upload-submit']",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "Admin Settings save",
+        "issue": "Saving valid TikTok URL from browser fails with 'Invalid origin'.",
+        "selector": "[data-testid='save-settings']",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin browser CRUD",
+        "issue": "UI login succeeds and session persists, but protected non-GET routes fail origin validation; users cannot perform required admin management actions.",
+        "affected_selectors": [
+          "[data-testid='upload-submit']",
+          "[data-testid='save-settings']",
+          "[data-testid^='save-admin-playlist']"
+        ]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Home hero (desktop/mobile)",
+        "issues": [
+          "Visual overexposure appears improved versus prior state; orb and chrome highlights are readable.",
+          "No horizontal overflow detected across tested routes and breakpoints (1920x1080, 390x844)."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_flashubz_e2e.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/tests/create_flashubz_fixtures.py",
+    "/app/tests/seed_ui_song.py",
+    "/app/tests/cleanup_test_only_data.py"
+  ],
+  "action_items": [
+    "Fix admin origin validation so browser-originated authenticated POST/PUT/DELETE from PUBLIC_URL pass safely (likely normalize scheme/host/default port before compare).",
+    "Investigate cookie attribute rewriting to ensure runtime behavior matches SameSiteStrict requirement.",
+    "After origin fix, retest full admin upload/edit/delete/publish/settings/editorial playlist workflows through UI.",
+    "Keep /app/memory/test_credentials.md populated for future auth test continuity."
+  ],
+  "critical_code_review_comments": [
+    "auth.admin() compares raw origin strings directly; strict string compare is brittle with default ports/proxy normalization and currently blocks valid admin writes.",
+    "Security requirement mismatch: code sets SameSite='strict' but deployed response observed as SameSite=None;Partitioned; verify ingress/proxy cookie rewriting policy.",
+    "Backend tests and cleanup utilities were missing initially; added reusable regression and cleanup coverage for future iterations."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_flashubz_e2e.py",
+    "/app/tests/create_flashubz_fixtures.py",
+    "/app/tests/seed_ui_song.py",
+    "/app/tests/cleanup_test_only_data.py",
+    "/app/test_reports/iteration_1.json"
+  ],
+  "success_rate": {
+    "backend": "89%",
+    "frontend": "74%"
+  },
+  "seed_data_creation": "Created TEST_ONLY WAV fixtures + TEST_ONLY cover. Seeded TEST_ONLY songs for UI checks via API helper; all TEST_ONLY songs/messages/playlists/events/download records cleaned. Verified /api/songs total=0 after cleanup.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Public routes are stable, mobile nav and overflow checks passed, WebGL canvas exists with active WebGL context, waveform pixels become non-zero during playback, SEO titles/meta and sitemap/robots checks passed. Primary blocker is admin browser write calls failing with Invalid origin. Re-run full admin UI suite after that fix.",
+  "rca of the issue": "Repro: login at /admin succeeds -> open /admin/upload or /admin/settings -> submit valid data -> UI error 'Invalid origin'. Backend endpoint protection in auth.admin() checks request Origin exact string equality against PUBLIC_URL. In deployed preview, runtime Origin normalization/proxy behavior differs enough to fail equality, so all protected non-GET admin actions are rejected with 403. Mitigation: parse and compare normalized scheme+hostname(+effective port) or use trusted-origin allowlist logic that tolerates default port normalization; preserve CSRF protection intent."
+}

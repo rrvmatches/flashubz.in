@@ -1,0 +1,9 @@
+import {Link} from 'react-router-dom';
+import {Music2,ArrowUpRight,Loader2} from 'lucide-react';
+import {Button} from './ui/button';
+import {mediaUrl} from '../lib/api';
+export const IconButton=({label,testId,children,active=false,...props})=><Button variant="ghost" size="icon" title={label} aria-label={label} data-testid={testId} className={`icon-button ${active?'is-active':''}`} {...props}>{children}</Button>;
+export const Cover=({song,className=''})=>song?.cover_url?<img data-testid={`cover-${song.id}`} src={mediaUrl(song.cover_url)} alt={`${song.name} cover`} className={`cover ${className}`} loading="lazy"/>:<div className={`cover default-cover ${className}`} aria-label="FLASHUBZ artwork"><Music2/><span>FLASHUBZ</span></div>;
+export const Loading=()=> <div className="loading-state" data-testid="loading-state" role="status"><Loader2 className="spin"/><span>Entering your music world…</span></div>;
+export const EmptyState=({title='THE FIRST DROP IS COMING',description='A new frequency. An entirely new world. Stay tuned.',action=true})=><div className="empty-state" data-testid="empty-state"><div className="empty-folder"><div className="folder-tab"/><div className="empty-folder-front"><Music2/><span>FLASHUBZ ARCHIVE</span></div></div><span className="eyebrow">A WORLD OF SOUND AWAITS</span><h2 data-testid="empty-state-title">{title}</h2><p data-testid="empty-state-description">{description}</p>{action&&<Link data-testid="empty-contact-link" className="text-link" to="/contact">Stay connected <ArrowUpRight size={15}/></Link>}</div>;
+export const PageHeading=({eyebrow,title,description,children})=><header className="page-heading"><div><span className="eyebrow" data-testid="page-eyebrow">{eyebrow}</span><h1 data-testid="page-title">{title}</h1>{description&&<p data-testid="page-description">{description}</p>}</div>{children}</header>;

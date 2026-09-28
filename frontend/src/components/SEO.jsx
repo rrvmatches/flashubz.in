@@ -1,0 +1,5 @@
+import {useEffect} from 'react';
+import {BASE,mediaUrl} from '../lib/api';
+export const SEO=({title='Enter the Music World',description='Discover independent sound in the FLASHUBZ Music World. Explore music, build your own playlists, and find your next frequency.',image='/assets/flashubz-artwork.webp'})=>{
+ useEffect(()=>{document.title=`FLASHUBZ — ${title}`;const update=(key,value,property=false)=>{let el=document.querySelector(`meta[${property?'property':'name'}="${key}"]`);if(!el){el=document.createElement('meta');el.setAttribute(property?'property':'name',key);document.head.appendChild(el);}el.content=value;};update('description',description);update('og:title',document.title,true);update('og:description',description,true);update('og:image',mediaUrl(image),true);update('og:url',BASE+window.location.pathname,true);let canonical=document.querySelector('link[rel="canonical"]');if(!canonical){canonical=document.createElement('link');canonical.rel='canonical';document.head.appendChild(canonical);}canonical.href=BASE+window.location.pathname;},[title,description,image]);return null;
+};

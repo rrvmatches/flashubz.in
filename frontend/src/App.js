@@ -1,0 +1,16 @@
+import {lazy,Suspense} from 'react';
+import {BrowserRouter,Routes,Route,Link} from 'react-router-dom';
+import {Toaster} from 'sonner';
+import {MusicProvider} from './context/MusicContext';
+import {Layout} from './components/Layout';
+import {Loading} from './components/Common';
+import Home from './pages/Home';
+import Discover from './pages/Discover';
+import Library,{PlaylistPage} from './pages/Library';
+import './App.css';
+import './finishing.css';
+const Song=lazy(()=>import('./pages/Song'));
+const Contact=lazy(()=>import('./pages/Contact'));
+const Admin=lazy(()=>import('./pages/Admin'));
+function App(){return <BrowserRouter><MusicProvider><Layout><Suspense fallback={<Loading/>}><Routes><Route path="/" element={<Home/>}/><Route path="/discover" element={<Discover/>}/><Route path="/song/:slug" element={<Song/>}/><Route path="/favorites" element={<Library favorites/>}/><Route path="/playlists" element={<Library/>}/><Route path="/playlist/:id" element={<PlaylistPage/>}/><Route path="/contact" element={<Contact/>}/><Route path="/admin/*" element={<Admin/>}/><Route path="*" element={<div className="page content-width empty-state"><h1 data-testid="not-found-title">LOST IN THE FREQUENCY?</h1><Link data-testid="not-found-home" to="/" className="text-link">Return to the world →</Link></div>}/></Routes></Suspense></Layout><Toaster position="top-right" theme="dark" richColors closeButton toastOptions={{className:'flashubz-toast'}}/></MusicProvider></BrowserRouter>};
+export default App;
