@@ -10,6 +10,7 @@ from core import db, client
 from auth import router as auth_router
 from catalog import router as catalog_router
 from admin_routes import router as admin_router
+from share import router as share_router
 from storage import init_storage
 
 @asynccontextmanager
@@ -29,6 +30,7 @@ app.add_middleware(CORSMiddleware,allow_origins=[os.environ['PUBLIC_URL']],allow
 app.include_router(auth_router)
 app.include_router(catalog_router)
 app.include_router(admin_router)
+app.include_router(share_router)
 
 @app.get('/api/')
 async def health(): return {'name':'FLASHUBZ MUSIC WORLD','status':'ok'}
