@@ -1,0 +1,49 @@
+{
+  "summary": "Comprehensive E2E test of NEW Bulk Upload feature (7 fixtures: 4 direct + 3 from ZIP with __MACOSX/notes.txt ignored). All critical flows PASSED: bulk-upload link in AdminSongs, mode toggle single/bulk with FLASHUBZ prefill, ID3 tag reading, shared defaults propagation with row.touched guard, artist fallback to tag when default cleared, remove row updates summary+submit label, shared cover propagation and cover-clear, validation errors (rights + missing name), concurrent 2-worker upload with per-row progress+status, retry after route-intercepted 422, single upload regression preserves embedded cover, mobile 390x844 no horizontal overflow with stretched mode buttons, discover shows the new 3D folders. Shared-cover deletion safety verified: media survives single deletion (still referenced), removed after all references gone. Full cleanup performed - public /api/songs total back to 3 (owner's real songs preserved).",
+  "test_credentials": "Read /app/memory/test_credentials.md; used ADMIN_USERNAME/ADMIN_PASSWORD from backend/.env (admin / BuvjGWUKgYCkvvVQvUGU).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/media/{id}", "issue": "After all referencing songs are deleted, GET on the previously-shared cover id returned 401 instead of the expected 404. Should probably 404 for missing/unreferenced media (task states 'may 404'). Not blocking."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BulkUpload.jsx (Defaults / bulk-cover-clear)", "issue": "Clicking bulk-cover-clear only resets React state (cover=null) but does NOT reset the underlying <input type=file id=bulk-cover-file> value. If the user later selects the SAME file, the input's onChange doesn't fire (browser sees no change), so the shared cover silently stays null and covers are not applied to rows. Reproduced when Playwright called set_input_files with the same PNG after clear -> POST /api/admin/covers was never issued and all uploaded rows ended up with empty cover_url. Fix: on clear, also set the file input's value=''. Freshly setting a cover (without prior clear) works correctly.", "selector": "[data-testid=\"bulk-cover-clear\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "release_date derivation from ID3 tags", "issue": "Task expects release_date '2021-01-01' for tagged-with-cover and '2020-05-04' for tagged-plain, but both come back empty. Root cause: fixtures store year in ID3v2.4 frame TDRC (mutagen confirmed: TDRC='2021' and TDRC='2020-05-04'), while jsmediatags primarily surfaces the legacy TYER frame; result is tags.year=''. lib/tags.js toDate() is correct but never receives the value. Fix in /app/frontend/src/lib/tags.js readTags(): read tags.TDRC/TDRL/TORY fallbacks (or use jsmediatags full-tag mode) and pass to toDate; or ask fixture generator to also write TYER. All other tag fields (title/artist/album/genre/embedded picture) are read fine.", "affected_selectors": ["bulk-row-{i}-status"]}
+    ],
+    "design_issues": [
+      {"screen": "/discover 3D folder tiles", "issues": ["Folder tile for a song with cover_url does not visibly render the cover artwork (only generic music-note icon on top of the folder). Task says folders should show the correct artwork. Non-blocking but reduces the promised 'per-song artwork' feel."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_flashubz_e2e.py",
+    "/app/backend/tests/test_admin_csrf_regression.py"
+  ],
+  "action_items": [
+    "MEDIUM: In BulkUpload.jsx `changeCover(null)` (and the bulk-cover-clear button), also reset the underlying <input id=\"bulk-cover-file\"> value so re-selecting the same file re-triggers onChange. Suggested: use a ref on the file input and set inputRef.current.value=''; on clear.",
+    "MEDIUM: /app/frontend/src/lib/tags.js readTags() should also honor ID3v2.4 date frames (TDRC / TDRL / TDOR) - not only TYER - so release_date propagates when fixtures/real files use v2.4 tags.",
+    "LOW: /api/media/{id} should return 404 after the file is soft-deleted, not 401 (task copy 'may 404').",
+    "LOW: Ensure /discover folder tiles actually render the song's cover_url thumbnail on the folder face when present."
+  ],
+  "critical_code_review_comments": [
+    "BulkUpload derive() precedence is implemented correctly (artist: default||tag, others: tag||default) and the row.touched Set correctly prevents shared-default overwrites of manually edited fields - verified end-to-end.",
+    "start() correctly reuses the previously uploaded cover_file_id via coverRef when the same File object is chosen again, avoiding duplicate /admin/covers uploads.",
+    "Two concurrent Promise-based workers pop from a shared queue - observed 2 parallel POST /api/admin/songs in backend logs.",
+    "bulk-cover-clear UX bug (input value not cleared) is the only real functional gap in the bulk feature."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "92%"
+  },
+  "seed_data_creation": "Uploaded 6 bulk songs + 1 retry-test song + 1 single-upload regression song using /app/tests/fixtures/TEST_ONLY_* assets. ALL cleaned via DELETE /api/admin/songs with X-CSRF-Token. Final GET /api/songs total = 3 (owner's real songs untouched: Anshi, Happy Soul, உன் அன்பில் வாழுதே). No settings/TikTok/editorial changes made.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bulk upload feature works end-to-end. Two remaining functional gaps: (1) bulk-cover-clear does not clear the file input's value, causing re-selecting the same file to no-op (leading to silently empty cover_url on all bulk-uploaded rows). Verified by seeing no POST /api/admin/covers in backend logs during a fresh-set-clear-reset-submit run. (2) jsmediatags does not read ID3v2.4 TDRC - release_date stays empty for the provided fixtures. Fixtures confirmed via mutagen: TDRC='2021' / '2020-05-04'. After main agent fixes these, re-run the bulk flow and verify: (a) POST /api/admin/covers appears once and every non-embedded uploaded song has the shared cover_url, (b) release_date '2021-01-01' / '2020-05-04' propagate. Cleanup script pattern: session cookie + X-CSRF-Token + DELETE /api/admin/songs/{id} for any song whose name starts with 'TEST'.",
+  "rca of the issue": "1) bulk-cover-clear only mutates React `cover` state; the underlying <input type=file> still has its FileList, so a subsequent set_input_files (or user re-picking the identical file) does not fire onChange (browser dedups). Result: cover stays null through start(); backend receives no cover_file_id and admin_routes.py doesn't fall back to embedded_cover() for non-embedded audio, so cover_url ends up ''. 2) fixture MP3s were tagged with ID3v2.4 (TDRC frame) but jsmediatags default reader emits `tags.year` only when TYER (v2.3) is present; tags.year is '' and toDate returns '', so release_date is empty in the POST payload."
+}

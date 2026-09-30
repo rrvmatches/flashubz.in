@@ -40,9 +40,15 @@ The supplied master prompt specifies: cinematic entrance, subtle mouse parallax,
 - Post-test polish: chart initial dimensions prevent the transient -1 size warning; moved orb face/play/pause geometry in front of its curved core so icons are not partially occluded.
 - Final direct screenshots at1920x800 and390x844 verified the corrected solid play glyph, visible framed WebGL scene, admin chart on both viewports, zero horizontal-overflow offenders, zero chart-size warnings, and successful logout. Final public songs0 and TikTok blank confirmed through external API.
 
+## Implemented — 2026-09-30 (fork)
+- **Bulk upload** at `/admin/upload?mode=bulk` (SINGLE / BULK tab switch; "Bulk upload" link on Songs page). Multi-select + drag & drop of MP3/WAV/FLAC/OGG/M4A and ZIP archives (extracted in-browser with JSZip; `__MACOSX`/dotfiles/non-audio ignored). ID3 tags read client-side with jsmediatags (title, artist, album, genre, year incl. ID3v2.4 TDRC, embedded picture); filename fallback strips extension, leading track numbers and underscores.
+- Shared batch defaults (artist default **FLASHUBZ** overrides tag artist; album/genre/language fill blanks; publish default on; downloads + rights confirmation) applied to rows unless a row field was manually edited. Per-row name/artist/album/genre editing, remove, per-row progress/status, 2 concurrent uploads, retry failed.
+- Covers: embedded artwork used automatically (also for single upload) via mutagen (APIC/covr/FLAC pictures/OGG block picture); otherwise one shared batch cover uploaded once to new `POST /api/admin/covers` and referenced through `cover_file_id` form field on `POST /api/admin/songs`. Delete only soft-deletes a media file when no live song references it.
+- Single upload form now prefills artist FLASHUBZ. Fixtures for tests: `/app/tests/fixtures/TEST_ONLY_*` (synthetic silent MP3s with ID3v2.3 tags, WAV, ZIP). Tested via iteration_3 (backend 100%, frontend pass after fixing cover-clear input reset + TDRC year); library restored to owner's 3 real songs.
+
 ## Prioritized remaining work
 ### P0 — owner inputs
-- Owner uploads own music and optional cover/lyrics via admin studio. No music content supplied yet, so public library correctly empty.
+- Owner uploads own music and optional cover/lyrics via admin studio (single or bulk). Owner has uploaded 3 real songs so far (no cover art yet).
 - Owner configures exact TikTok profile if desired.
 ### P1 — refinements, not blocked core flows
 - Full 3D corridor with scroll-driven camera/light sweeps (current folders have CSS3D entrance and hover/open effects).

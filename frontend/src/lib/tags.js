@@ -10,7 +10,7 @@ export const readTags=file=>new Promise(resolve=>{
  jsmediatags.read(file,{onSuccess:({tags})=>{
   let picture='';
   if(tags.picture?.data?.length){try{picture=URL.createObjectURL(new Blob([new Uint8Array(tags.picture.data)],{type:tags.picture.format||'image/jpeg'}));}catch{picture='';}}
-  resolve({title:(tags.title||'').trim(),artist:(tags.artist||'').trim(),album:(tags.album||'').trim(),genre:(tags.genre||'').trim(),year:tags.year||'',picture});
+  resolve({title:(tags.title||'').trim(),artist:(tags.artist||'').trim(),album:(tags.album||'').trim(),genre:(tags.genre||'').trim(),year:tags.year||tags.TDRC?.data||tags.TDRL?.data||tags.TDOR?.data||tags.DATE?.data||'',picture});
  },onError:()=>resolve({})});
 });
 export async function expandFiles(list){
