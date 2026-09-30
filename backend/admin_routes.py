@@ -1,12 +1,14 @@
 import io
 import re
 import os
+import base64
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel, Field, HttpUrl
 from starlette.concurrency import run_in_threadpool
 from PIL import Image, UnidentifiedImageError
 from mutagen import File as AudioInfo
+from mutagen.flac import Picture
 from core import db, uid, now, Song, SongEdit
 from auth import admin
 from storage import put_object, CACHE
@@ -24,8 +26,38 @@ async def store_file(data, original, content_type, kind, extension):
     await db.files.insert_one({'id':file_id,'storage_path':result['path'],'original_filename':original,'content_type':content_type,'size':len(data),'is_deleted':False,'created_at':now()})
     return file_id
 
+def process_cover(raw):
+    im=Image.open(io.BytesIO(raw)); im.load(); im.thumbnail((1200,1200))
+    output=io.BytesIO(); im.convert('RGB').save(output,format='WEBP',quality=86); return output.getvalue()
+
+def embedded_cover(info):
+    try:
+        pictures=getattr(info,'pictures',None)
+        if pictures: return pictures[0].data
+        tags=getattr(info,'tags',None)
+        if tags is None: return None
+        apic=tags.getall('APIC') if hasattr(tags,'getall') else []
+        if apic: return apic[0].data
+        covr=tags.get('covr')
+        if covr: return bytes(covr[0])
+        block=tags.get('metadata_block_picture')
+        if block: return Picture(base64.b64decode(block[0])).data
+    except Exception: return None
+    return None
+
+async def read_cover(cover):
+    cover_bytes=await cover.read(10*1024*1024+1)
+    if len(cover_bytes)>10*1024*1024: raise HTTPException(413,'Cover must be smaller than 10 MB')
+    try: return process_cover(cover_bytes)
+    except Exception: raise HTTPException(422,'Please upload a valid cover image')
+
+@router.post('/covers',status_code=201)
+async def upload_cover(cover: UploadFile=File(...)):
+    cover_id=await store_file(await read_cover(cover),cover.filename,'image/webp','covers','webp')
+    return {'id':cover_id,'url':f'/api/media/{cover_id}'}
+
 @router.post('/songs',response_model=Song,status_code=201)
-async def upload_song(metadata: str=Form(...), audio: UploadFile=File(...), cover: UploadFile|None=File(None)):
+async def upload_song(metadata: str=Form(...), audio: UploadFile=File(...), cover: UploadFile|None=File(None), cover_file_id: str=Form('')):
     try: meta=SongEdit.model_validate_json(metadata)
     except Exception: raise HTTPException(422,'Please provide a song name, artist, and valid metadata.')
     ext=(audio.filename or '').rsplit('.',1)[-1].lower()
@@ -38,16 +70,17 @@ async def upload_song(metadata: str=Form(...), audio: UploadFile=File(...), cove
         if info is None or not info.info.length: raise ValueError()
         duration=info.info.length
     except Exception: raise HTTPException(422,'This file is not valid audio')
-    cover_bytes=None
-    if cover and cover.filename:
-        cover_bytes=await cover.read(10*1024*1024+1)
-        if len(cover_bytes)>10*1024*1024: raise HTTPException(413,'Cover must be smaller than 10 MB')
-        try:
-            im=Image.open(io.BytesIO(cover_bytes)); im.load(); im.thumbnail((1200,1200))
-            output=io.BytesIO(); im.convert('RGB').save(output,format='WEBP',quality=86); cover_bytes=output.getvalue()
-        except Exception: raise HTTPException(422,'Please upload a valid cover image')
+    cover_bytes=await read_cover(cover) if cover and cover.filename else None
+    if cover_file_id and not cover_bytes and not await db.files.find_one({'id':cover_file_id,'content_type':'image/webp','is_deleted':False}): raise HTTPException(422,'Shared cover artwork was not found. Please choose it again.')
     audio_id=await store_file(data,audio.filename,mime[ext],'audio',ext)
-    cover_id=await store_file(cover_bytes,cover.filename,'image/webp','covers','webp') if cover_bytes else ''
+    cover_id=''
+    if cover_bytes: cover_id=await store_file(cover_bytes,cover.filename,'image/webp','covers','webp')
+    elif cover_file_id: cover_id=cover_file_id
+    else:
+        raw=embedded_cover(info)
+        if raw:
+            try: cover_id=await store_file(process_cover(raw),f'{audio.filename}.cover','image/webp','covers','webp')
+            except Exception: cover_id=''
     base=re.sub(r'[^a-z0-9]+','-',meta.name.lower()).strip('-') or 'song'
     slug=base
     if await db.songs.count_documents({'slug':slug}): slug=base+'-'+uid()[:8]
@@ -70,7 +103,7 @@ async def delete_song(song_id: str):
     if not song: raise HTTPException(404,'Song not found')
     await db.songs.update_one({'id':song_id},{'$set':{'is_deleted':True,'published':False}})
     for fid in [song.get('audio_file_id'),song.get('cover_file_id')]:
-        if fid:
+        if fid and not await db.songs.count_documents({'is_deleted':False,'$or':[{'audio_file_id':fid},{'cover_file_id':fid}]}):
             await db.files.update_one({'id':fid},{'$set':{'is_deleted':True}})
             (CACHE/fid).unlink(missing_ok=True)
     return {'ok':True}
